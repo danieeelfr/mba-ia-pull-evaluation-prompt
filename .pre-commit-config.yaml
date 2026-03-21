@@ -1,0 +1,17 @@
+repos:
+  - repo: local
+    hooks:
+      - id: prompt-tests
+        name: Validar prompt antes do commit
+        entry: pytest tests/test_prompts.py -v
+        language: system
+        pass_filenames: false
+        files: prompts/bug_to_user_story_v2\.yml
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files

@@ -591,8 +591,8 @@ O maior salto foi no **Completeness** (+0.26), que mede se a história de usuár
 ### Configuração inicial
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/SEU_USUARIO/desafio-prompt-engineer.git
-cd desafio-prompt-engineer
+git clone https://github.com/danieeelfr/mba-ia-pull-evaluation-prompt.git
+cd mba-ia-pull-evaluation-prompt
 
 # 2. Crie e ative o ambiente virtual
 python3 -m venv venv

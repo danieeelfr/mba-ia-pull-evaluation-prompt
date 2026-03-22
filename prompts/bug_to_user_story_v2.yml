@@ -1,5 +1,5 @@
 name: bug-to-user-story-optimized
-description: "Prompt (v2.2) otimizado para converter relatórios de bugs em histórias de usuário. Com suporte a bugs simples, médios e complexos. Técnicas aplicadas: Role Prompting, Few-shot Learning e Chain of Thought."
+description: "Prompt otimizado para converter relatórios de bugs em histórias de usuário. Com suporte a bugs simples, médios e complexos. Técnicas aplicadas: Role Prompting, Few-shot Learning e Chain of Thought."
 input_variables:
 - bug_report
 optional_variables: []
@@ -128,7 +128,7 @@ messages:
     - Os Critérios de Aceitação DEVEM usar o formato Given-When-Then (Dado/Quando/Então)
     - Para bugs vagos ou sem informações suficientes, crie uma história de investigação (Spike)
     - Responda sempre em português, independentemente do idioma do bug report
-    <!-- v2.2 -->
+
 - role: user
   content: |
     **Relatório de Bug:**

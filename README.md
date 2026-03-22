@@ -533,6 +533,50 @@ O maior salto foi no **Completeness** (+0.26), que mede se a história de usuár
 }
 ```
 
+#### Tracing (Exemplo 2)
+
+```json
+{
+  "inputs": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Avalie os CRITÉRIOS DE ACEITAÇÃO da user story gerada:\n BUG REPORT: Campo de email aceita texto sem @"
+      }
+    ]
+  },
+  "outputs": {
+    "generations": [
+      {
+        "text": "{\n  \"score\": 0.95,\n  \"reasoning\": \"Os critérios cobrem perfeitamente todos os fluxos de sucesso e falha.\"\n}"
+      }
+    ]
+  }
+}
+```
+
+#### Tracing (Exemplo 3)
+
+```json
+{
+  "inputs": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Avalie a Especificidade da user story:\n BUG REPORT: O relatório de vendas demora 2 minutos"
+      }
+    ]
+  },
+  "outputs": {
+    "generations": [
+      {
+        "text": "{\n  \"score\": 1.0,\n  \"reasoning\": \"A user story indica exatamente os limites de tempo e otimizações com dados quantitativos adequados.\"\n}"
+      }
+    ]
+  }
+}
+```
+
 ---
 
 ## Como Executar

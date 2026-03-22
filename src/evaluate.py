@@ -7,7 +7,7 @@ Este script:
 3. Puxa prompts otimizados do LangSmith Hub (fonte única de verdade)
 4. Executa prompts contra o dataset
 5. Calcula 4 métricas específicas (Tone, Acceptance Criteria, User Story Format, Completeness)
-6. Publica resultados no dashboard do LangSmith
+6. Publica resultados no dashboard do LangSmith (Experiments)
 7. Exibe resumo no terminal
 
 Suporta múltiplos providers de LLM:
@@ -20,14 +20,17 @@ Configure o provider no arquivo .env através da variável LLM_PROVIDER.
 import os
 import sys
 import json
+import uuid
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 from pathlib import Path
-from dotenv import load_dotenv
-from langsmith import Client
-from langchain import hub
-from langchain_core.prompts import ChatPromptTemplate
-from utils import check_env_vars, format_score, print_section_header, get_llm as get_configured_llm
-from metrics import (
+from dotenv import load_dotenv  # type: ignore
+from langsmith import Client  # type: ignore
+from langsmith.schemas import RunTypeEnum  # type: ignore
+from langchain import hub  # type: ignore
+from langchain_core.prompts import ChatPromptTemplate  # type: ignore
+from utils import check_env_vars, format_score, print_section_header, get_llm as get_configured_llm  # type: ignore
+from metrics import (  # type: ignore
     evaluate_tone_score,
     evaluate_acceptance_criteria_score,
     evaluate_user_story_format_score,
@@ -146,16 +149,42 @@ def pull_prompt_from_langsmith(prompt_name: str) -> ChatPromptTemplate:
 def evaluate_prompt_on_example(
     prompt_template: ChatPromptTemplate,
     example: Any,
-    llm: Any
+    llm: Any,
+    client: Client,
+    project_name: str
 ) -> Dict[str, Any]:
     try:
         inputs = example.inputs if hasattr(example, 'inputs') else {}
         outputs = example.outputs if hasattr(example, 'outputs') else {}
 
-        chain = prompt_template | llm
+        # Criar run no LangSmith para tracing
+        run_id = str(uuid.uuid4())
+        try:
+            client.create_run(
+                id=run_id,
+                name="prompt_evaluation",
+                run_type=RunTypeEnum.chain,
+                inputs=inputs,
+                reference_example_id=example.id,
+                project_name=project_name,
+            )
+        except Exception:
+            run_id = None
 
+        chain = prompt_template | llm
         response = chain.invoke(inputs)
         answer = response.content
+
+        # Fechar o run com a resposta
+        if run_id:
+            try:
+                client.update_run(
+                    run_id=run_id,
+                    outputs={"answer": answer},
+                    end_time=datetime.now(timezone.utc),
+                )
+            except Exception:
+                pass
 
         reference = outputs.get("reference", "") if isinstance(outputs, dict) else ""
 
@@ -167,7 +196,8 @@ def evaluate_prompt_on_example(
         return {
             "answer": answer,
             "reference": reference,
-            "question": question
+            "question": question,
+            "run_id": run_id
         }
 
     except Exception as e:
@@ -177,14 +207,35 @@ def evaluate_prompt_on_example(
         return {
             "answer": "",
             "reference": "",
-            "question": ""
+            "question": "",
+            "run_id": None
         }
+
+
+def send_feedback_to_langsmith(
+    client: Client,
+    run_id: str,
+    metrics: Dict[str, float]
+) -> None:
+    """Envia os scores de cada exemplo para o LangSmith como feedback."""
+    if not run_id:
+        return
+    try:
+        for key, score in metrics.items():
+            client.create_feedback(
+                run_id=run_id,
+                key=key,
+                score=score,
+            )
+    except Exception as e:
+        print(f"      ⚠️  Erro ao enviar feedback para LangSmith: {e}")
 
 
 def evaluate_prompt(
     prompt_name: str,
     dataset_name: str,
-    client: Client
+    client: Client,
+    project_name: str
 ) -> Dict[str, float]:
     print(f"\n🔍 Avaliando: {prompt_name}")
 
@@ -204,10 +255,11 @@ def evaluate_prompt(
         print("   Avaliando exemplos...")
 
         for i, example in enumerate(examples, 1):
-            result = evaluate_prompt_on_example(prompt_template, example, llm)
+            result = evaluate_prompt_on_example(
+                prompt_template, example, llm, client, project_name
+            )
 
             if result["answer"]:
-                # Avaliar 4 métricas em paralelo (more efficient)
                 metrics = evaluate_metrics_parallel(
                     result["question"],
                     result["answer"],
@@ -219,18 +271,21 @@ def evaluate_prompt(
                 format_scores.append(metrics["user_story_format"])
                 completeness_scores.append(metrics["completeness"])
 
-                print(f"      [{i}/{min(10, len(examples))}] Tone:{metrics['tone']:.2f} Acceptance:{metrics['acceptance_criteria']:.2f} Format:{metrics['user_story_format']:.2f} Completeness:{metrics['completeness']:.2f}")
+                # Enviar scores para o LangSmith
+                send_feedback_to_langsmith(client, result["run_id"], metrics)
 
-        avg_tone = sum(tone_scores) / len(tone_scores) if tone_scores else 0.0
-        avg_acceptance = sum(acceptance_scores) / len(acceptance_scores) if acceptance_scores else 0.0
-        avg_format = sum(format_scores) / len(format_scores) if format_scores else 0.0
-        avg_completeness = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0.0
+                print(f"      [{i}/{len(examples)}] Tone:{metrics['tone']:.2f} Acceptance:{metrics['acceptance_criteria']:.2f} Format:{metrics['user_story_format']:.2f} Completeness:{metrics['completeness']:.2f}")
+
+        avg_tone = float(sum(tone_scores) / len(tone_scores) if tone_scores else 0.0)
+        avg_acceptance = float(sum(acceptance_scores) / len(acceptance_scores) if acceptance_scores else 0.0)
+        avg_format = float(sum(format_scores) / len(format_scores) if format_scores else 0.0)
+        avg_completeness = float(sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0.0)
 
         return {
-            "tone": round(avg_tone, 4),
-            "acceptance_criteria": round(avg_acceptance, 4),
-            "user_story_format": round(avg_format, 4),
-            "completeness": round(avg_completeness, 4)
+            "tone": float(f"{avg_tone:.4f}"),
+            "acceptance_criteria": float(f"{avg_acceptance:.4f}"),
+            "user_story_format": float(f"{avg_format:.4f}"),
+            "completeness": float(f"{avg_completeness:.4f}")
         }
 
     except Exception as e:
@@ -313,8 +368,8 @@ def main():
         return 1
 
     prompts_to_evaluate = [
-    #    "leonanluppi/bug_to_user_story_v1",
-       f"{username}/bug_to_user_story_v2",
+        # "leonanluppi/bug_to_user_story_v1",
+        f"{username}/bug_to_user_story_v2",
     ]
 
     print("\n" + "=" * 70)
@@ -332,7 +387,7 @@ def main():
         evaluated_count += 1
 
         try:
-            scores = evaluate_prompt(prompt_name, dataset_name, client)
+            scores = evaluate_prompt(prompt_name, dataset_name, client, project_name)
             passed = display_results(prompt_name, scores)
             all_passed = all_passed and passed
 
@@ -372,7 +427,7 @@ def main():
     if all_passed:
         print("✅ Todos os prompts atingiram média >= 0.9!")
         print(f"\n✓ Confira os resultados em:")
-        print(f"  https://smith.langchain.com/projects/{project_name}")
+        print(f"  https://smith.langchain.com/projects/p/{project_name}")
         print("\nPróximos passos:")
         print("1. Documente o processo no README.md")
         print("2. Capture screenshots das avaliações")

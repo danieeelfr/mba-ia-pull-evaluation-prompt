@@ -1,5 +1,4 @@
 # Pull, Otimização e Avaliação de Prompts com LangChain e LangSmith
-![Avaliação do Prompt](https://github.com/danieeelfr/desafio-prompt-engineer/actions/workflows/evaluate.yml/badge.svg)
 
 ## Objetivo
 
@@ -415,6 +414,124 @@ O maior salto foi no **Completeness** (+0.26), que mede se a história de usuár
 | 14 | 1.00 | 1.00 | 1.00 | 1.00 |
 | 15 | 0.98 | 1.00 | 1.00 | 0.92 |
 | **Média** | **0.97** | **0.98** | **0.98** | **0.96** |
+
+---
+## Evidências
+
+### Screenshots do LangSmith
+
+#### Scores
+![Feedback Scores no LangSmith](assets/score.png)
+
+#### Datasets & Experiments
+![Datasets & Experiments no LangSmith](assets/datasets.png)
+
+#### Tracing (input e output)
+
+```json
+{
+  "inputs": {
+    "messages": [
+      [
+        {
+          "id": [
+            "langchain",
+            "schema",
+            "messages",
+            "HumanMessage"
+          ],
+          "kwargs": {
+            "content": "\nVocê é um avaliador especializado em Critérios de Aceitação de User Stories.\n\nBUG REPORT ORIGINAL:\nBotão de adicionar ao carrinho não funciona no produto ID 1234.\n\nUSER STORY GERADA:\nComo um(a) cliente navegando na loja, eu quero adicionar produtos ao meu carrinho de compras, para que eu possa continuar comprando e finalizar minha compra depois.\n\n### Critérios de Aceitação\n- Dado que estou visualizando a página do produto ID 1234\n- Quando clico no botão \"Adicionar ao Carrinho\"\n- Então o produto deve ser adicionado ao carrinho com sucesso\n- E devo ver uma confirmação visual da adição (ex: \"Produto adicionado!\")\n- E o contador de itens no carrinho (header) deve ser atualizado\n- Dado que o produto ID 1234 está fora de estoque\n- Quando acesso a página do produto\n- Então o botão \"Adicionar ao Carrinho\" deve estar desabilitado\n- E uma mensagem indicando \"Fora de Estoque\" deve ser exibida.\n\nUSER STORY ESPERADA (Referência):\nComo um cliente navegando na loja, eu quero adicionar produtos ao meu carrinho de compras, para que eu possa continuar comprando e finalizar minha compra depois.\n\nCritérios de Aceitação:\n- Dado que estou visualizando um produto\n- Quando clico no botão \"Adicionar ao Carrinho\"\n- Então o produto deve ser adicionado ao carrinho\n- E devo ver uma confirmação visual\n- E o contador do carrinho deve ser atualizado\n\nINSTRUÇÕES:\n\nAvalie os CRITÉRIOS DE ACEITAÇÃO da user story gerada:\n\n1. FORMATO ESTRUTURADO (0.0 a 1.0):\n   - Usa formato Given-When-Then ou estrutura similar?\n   - Cada critério é claramente separado e identificável?\n   - Formatação facilita leitura e entendimento?\n\n2. ESPECIFICIDADE E TESTABILIDADE (0.0 a 1.0):\n   - Critérios são específicos e não vagos?\n   - É possível criar testes automatizados a partir deles?\n   - Evita termos ambíguos como \"deve funcionar bem\"?\n   - Critérios mensuráveis e verificáveis?\n\n3. QUANTIDADE ADEQUADA (0.0 a 1.0):\n   - Tem quantidade apropriada de critérios (nem muito, nem pouco)?\n   - Ideal: 3-7 critérios para bugs simples/médios\n   - Bugs complexos podem ter mais critérios organizados\n\n4. COBERTURA COMPLETA (0.0 a 1.0):\n   - Cobre todos os aspectos do bug?\n   - Inclui cenários de sucesso e erro?\n   - Considera edge cases quando relevante?\n   - Aborda validações e requisitos técnicos do bug?\n\nCalcule a MÉDIA dos 4 critérios para obter o score final.\n\nIMPORTANTE: Retorne APENAS um objeto JSON válido no formato:\n{\n  \"score\": <valor entre 0.0 e 1.0>,\n  \"reasoning\": \"<explicação detalhada com exemplos específicos, até 150 palavras>\"\n}\n\nNÃO adicione nenhum texto antes ou depois do JSON.\n",
+            "type": "human"
+          },
+          "lc": 1,
+          "type": "constructor"
+        }
+      ]
+    ]
+  },
+  "outputs": {
+    "generations": [
+      [
+        {
+          "generation_info": {
+            "finish_reason": "STOP",
+            "safety_ratings": []
+          },
+          "message": {
+            "id": [
+              "langchain",
+              "schema",
+              "messages",
+              "AIMessage"
+            ],
+            "kwargs": {
+              "content": "```json\n{\n  \"score\": 1.0,\n  \"reasoning\": \"Os critérios de aceitação estão excelentemente estruturados no formato Given-When-Then, facilitando a leitura e o entendimento. São altamente específicos e testáveis, detalhando resultados esperados como a confirmação visual e a atualização do contador, além de cenários de erro como produto fora de estoque. A quantidade é adequada, cobrindo o fluxo de sucesso e um importante edge case que pode causar o bug original. A cobertura é completa, abordando todos os aspectos relevantes para a correção do bug e garantindo que o botão funcione corretamente em diferentes condições.\"\n}\n```",
+              "id": "run-b3ebf4dc-4969-47cc-bc0c-2b99a7e25933-0",
+              "invalid_tool_calls": [],
+              "response_metadata": {
+                "finish_reason": "STOP",
+                "prompt_feedback": {
+                  "block_reason": 0,
+                  "safety_ratings": []
+                },
+                "safety_ratings": []
+              },
+              "tool_calls": [],
+              "type": "ai",
+              "usage_metadata": {
+                "input_token_details": {
+                  "cache_read": 0
+                },
+                "input_tokens": 705,
+                "output_tokens": 138,
+                "total_tokens": 2077
+              }
+            },
+            "lc": 1,
+            "type": "constructor"
+          },
+          "text": "```json\n{\n  \"score\": 1.0,\n  \"reasoning\": \"Os critérios de aceitação estão excelentemente estruturados no formato Given-When-Then, facilitando a leitura e o entendimento. São altamente específicos e testáveis, detalhando resultados esperados como a confirmação visual e a atualização do contador, além de cenários de erro como produto fora de estoque. A quantidade é adequada, cobrindo o fluxo de sucesso e um importante edge case que pode causar o bug original. A cobertura é completa, abordando todos os aspectos relevantes para a correção do bug e garantindo que o botão funcione corretamente em diferentes condições.\"\n}\n```",
+          "type": "ChatGeneration"
+        }
+      ]
+    ],
+    "llm_output": {
+      "prompt_feedback": {
+        "block_reason": 0,
+        "safety_ratings": []
+      }
+    },
+    "run": null,
+    "type": "LLMResult"
+  },
+  "metadata": {
+    "LANGSMITH_ENDPOINT": "https://api.smith.langchain.com",
+    "LANGSMITH_PROJECT": "MBAFullCycleChallange2",
+    "LANGSMITH_TRACING": "true",
+    "ls_model_name": "models/gemini-2.5-flash",
+    "ls_model_type": "chat",
+    "ls_provider": "google_genai",
+    "ls_run_depth": 0,
+    "ls_temperature": 0,
+    "revision_id": "df15c60-dirty"
+  },
+  "langsmith": {
+    "organization": {
+      "name": "Personal",
+      "id": "86cd0371-069d-4423-a8ad-09af4c11292c"
+    },
+    "workspace": {
+      "name": "Workspace 1",
+      "id": "b1743fe2-4077-435d-948a-1c604d675c6f"
+    },
+    "tracing_project": {
+      "id": "30ce17fb-20dc-4e75-8a51-784faba9de70",
+      "name": "MBAFullCycleChallange2"
+    }
+  }
+}
+```
 
 ---
 

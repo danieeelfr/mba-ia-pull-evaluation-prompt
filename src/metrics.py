@@ -26,6 +26,7 @@ import os
 import json
 import re
 from typing import Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
 from utils import get_eval_llm
@@ -41,9 +42,75 @@ def get_evaluator_llm():
     return get_eval_llm(temperature=0)
 
 
-def extract_json_from_response(response_text: str) -> Dict[str, Any]:
+def evaluate_metrics_parallel(question: str, answer: str, reference: str, timeout: int = 60) -> Dict[str, Any]:
+    """
+    Avalia 4 métricas em paralelo usando ThreadPoolExecutor.
+
+    Executa as 4 métricas de forma concorrente (ao invés de sequencial),
+    reduzindo o tempo total de avaliação em ~60-75%.
+
+    Args:
+        question: Pergunta/input do usuário
+        answer: Resposta gerada pelo prompt
+        reference: Resposta esperada (ground truth)
+        timeout: Timeout em segundos para cada métrica (default: 60s)
+
+    Returns:
+        Dict com os scores das 4 métricas:
+        {
+            "tone": 0.92,
+            "acceptance_criteria": 0.94,
+            "user_story_format": 0.91,
+            "completeness": 0.93
+        }
+    """
+
+    results = {}
+
+    try:
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Submeter 4 tarefas em paralelo
+            futures = {
+                executor.submit(evaluate_tone_score, question, answer, reference): "tone",
+                executor.submit(evaluate_acceptance_criteria_score, question, answer, reference): "acceptance_criteria",
+                executor.submit(evaluate_user_story_format_score, question, answer, reference): "user_story_format",
+                executor.submit(evaluate_completeness_score, question, answer, reference): "completeness"
+            }
+
+            # Coletar resultados conforme completam (com timeout)
+            for future in as_completed(futures, timeout=timeout):
+                metric_name = futures[future]
+                try:
+                    metric_result = future.result(timeout=timeout)
+                    results[metric_name] = metric_result["score"]
+                except Exception as e:
+                    print(f"⚠️  Erro na métrica '{metric_name}': {e}")
+                    results[metric_name] = 0.0
+
+        return results
+
+    except Exception as e:
+        print(f"❌ Erro ao avaliar métricas em paralelo: {e}")
+        # Fallback: retornar estrutura vazia
+        return {
+            "tone": 0.0,
+            "acceptance_criteria": 0.0,
+            "user_story_format": 0.0,
+            "completeness": 0.0
+        }
+
+
+
+def extract_json_from_response(response_text: str, metric_name: str = "unknown") -> Dict[str, Any]:
     """
     Extrai JSON de uma resposta de LLM que pode conter texto adicional.
+
+    Args:
+        response_text: Resposta do LLM (pode conter texto adicional)
+        metric_name: Nome da métrica sendo avaliada (para logging)
+
+    Returns:
+        Dict com score e reasoning, ou dict default em caso de erro
     """
     try:
         # Tentar parsear diretamente
@@ -60,9 +127,16 @@ def extract_json_from_response(response_text: str) -> Dict[str, Any]:
             except json.JSONDecodeError:
                 pass
 
-        # Se não conseguir extrair, retornar valores default
-        print(f"⚠️  Não foi possível extrair JSON da resposta: {response_text[:200]}...")
-        return {"score": 0.0, "reasoning": "Erro ao processar resposta"}
+        # Se não conseguir extrair, retornar valores default e avisar
+        print(
+            f"⚠️  JSON_PARSE_ERROR na métrica '{metric_name}':\n"
+            f"   Não foi possível extrair JSON válido da resposta do LLM.\n"
+            f"   Primeiros 300 caracteres recebidos:\n"
+            f"   {response_text[:300]}...\n"
+            f"   Retornando score=0.0 (erro na avaliação, não erro real do prompt)"
+        )
+        return {"score": 0.0, "reasoning": "Erro ao processar resposta do LLM"}
+
 
 
 def evaluate_f1_score(question: str, answer: str, reference: str) -> Dict[str, Any]:
@@ -130,7 +204,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="F1-Score")
 
         precision = float(result.get("precision", 0.0))
         recall = float(result.get("recall", 0.0))
@@ -196,7 +270,7 @@ INSTRUÇÕES:
 
 Avalie a CLAREZA da resposta gerada com base nos critérios:
 
-1. ORGANIZAÇÃO (0.0 a 1.0):
+ORGANIZAÇÃO (0.0 a 1.0):
    - A resposta tem estrutura lógica e bem organizada?
    - Informações estão em ordem sensata?
 
@@ -227,7 +301,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="Clarity")
 
         score = float(result.get("score", 0.0))
 
@@ -265,7 +339,7 @@ def evaluate_precision(question: str, answer: str, reference: str) -> Dict[str, 
             "reasoning": "Explicação do LLM..."
         }
     """
-    
+
     evaluator_prompt = f"""
 Você é um avaliador especializado em detectar PRECISÃO e ALUCINAÇÕES em respostas de IA.
 
@@ -314,7 +388,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="Precision")
 
         score = float(result.get("score", 0.0))
 
@@ -399,7 +473,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="Tone Score")
 
         score = float(result.get("score", 0.0))
 
@@ -487,7 +561,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="Acceptance Criteria Score")
 
         score = float(result.get("score", 0.0))
 
@@ -577,7 +651,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="User Story Format Score")
 
         score = float(result.get("score", 0.0))
 
@@ -677,7 +751,7 @@ NÃO adicione nenhum texto antes ou depois do JSON.
     try:
         llm = get_evaluator_llm()
         response = llm.invoke([HumanMessage(content=evaluator_prompt)])
-        result = extract_json_from_response(response.content)
+        result = extract_json_from_response(response.content, metric_name="Completeness Score")
 
         score = float(result.get("score", 0.0))
 
